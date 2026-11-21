@@ -188,6 +188,33 @@
     display: none !important;
   }
 
+  /* Map iPhone Pin + Green Dot Below */
+  .map-iphone-pin {
+    position: absolute;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    transform: translate(-50%, calc(-100% + 4px));
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  .map-iphone-pin__img {
+    width: 44px;
+    height: 70px;
+    object-fit: cover;
+    display: block;
+    margin-bottom: -4px;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.65));
+  }
+
+  .map-iphone-pin__img--visible {
+    opacity: 1;
+  }
+
   .sheet {
     position: relative;
     flex: 0 0 auto;
@@ -452,7 +479,11 @@
 
     <div class="actions">
       <div class="card">
-        <div class="icon" style="background:#5856d6">▶</div>
+        <div class="icon" style="background:#5856d6" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+        </div>
         <h2>Play Sound</h2>
         <p>Off</p>
       </div>
@@ -577,6 +608,66 @@ const ipLocationPromise = (async () => {
   return null;
 })();
 
+function createIPhoneOverlay(position) {
+  let phoneImg = null;
+
+  class IPhonePinOverlay extends google.maps.OverlayView {
+    constructor(pos) {
+      super();
+      this.pos = pos;
+      this.div = null;
+    }
+
+    onAdd() {
+      const div = document.createElement('div');
+      div.className = 'map-iphone-pin';
+      div.title = 'Approximate IP location';
+
+      const img = document.createElement('img');
+      img.className = 'map-iphone-pin__img';
+      img.src = 'https://applesn.info/device-image/27.0/iPhone/iPhone17,2-3b3b3c-404041/online-nolocation_iphone__3x.png';
+      img.alt = 'iPhone';
+
+      const dot = document.createElement('span');
+      dot.className = 'status-online__dot';
+      dot.setAttribute('aria-hidden', 'true');
+
+      div.appendChild(img);
+      div.appendChild(dot);
+
+      phoneImg = img;
+      this.div = div;
+      this.getPanes().overlayMouseTarget.appendChild(div);
+    }
+
+    draw() {
+      const proj = this.getProjection();
+      if (!proj || !this.div) return;
+      const point = proj.fromLatLngToDivPixel(new google.maps.LatLng(this.pos.lat, this.pos.lng));
+      if (!point) return;
+      this.div.style.left = `${point.x}px`;
+      this.div.style.top = `${point.y}px`;
+    }
+
+    onRemove() {
+      if (this.div && this.div.parentNode) {
+        this.div.parentNode.removeChild(this.div);
+      }
+      this.div = null;
+      phoneImg = null;
+    }
+  }
+
+  const overlay = new IPhonePinOverlay(position);
+  overlay.setMap(map);
+
+  return () => {
+    if (phoneImg) {
+      phoneImg.classList.add('map-iphone-pin__img--visible');
+    }
+  };
+}
+
 async function initMap(){
   map = new google.maps.Map(document.getElementById('map'), {
     center: {lat: 20, lng: 0},
@@ -590,17 +681,28 @@ async function initMap(){
   });
   const loc = await ipLocationPromise;
   if (!loc) { document.title = 'Google Maps — IP location unavailable'; return; }
+  const revealPhone = createIPhoneOverlay(loc);
   map.panTo(loc);
   const startZoom = 2;
   const endZoom = 16;
   map.setZoom(startZoom);
   let currentZoom = startZoom;
+  let phoneShown = false;
+  const showPhoneOnce = () => {
+    if (phoneShown) return;
+    phoneShown = true;
+    revealPhone();
+  };
   const zoomTimer = setInterval(() => {
-    if (currentZoom >= endZoom) { clearInterval(zoomTimer); return; }
+    if (currentZoom >= endZoom) {
+      clearInterval(zoomTimer);
+      google.maps.event.addListenerOnce(map, 'idle', showPhoneOnce);
+      setTimeout(showPhoneOnce, 400);
+      return;
+    }
     currentZoom += 1;
     map.setZoom(currentZoom);
   }, 220);
-  new google.maps.Marker({position:loc, map, title:'Approximate IP location'});
 }
 </script>
 <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDxUJRZlcKFGYI5UKOu52lQV-aACGxLtSs&callback=initMap"></script>
